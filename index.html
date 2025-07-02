@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radha API - Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+        
+        header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+            margin-bottom: 20px;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .audio-preview {
+            margin-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 20px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-online {
+            background-color: #48bb78;
+        }
+        
+        .status-offline {
+            background-color: #f56565;
+        }
+        
+        .card h2 {
+            color: #5a67d8;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #5a67d8, #667eea);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(90, 103, 216, 0.4);
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: #5a67d8;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .success {
+            background: #f0fff4;
+            border: 1px solid #68d391;
+            color: #2d7738;
+        }
+        
+        .error {
+            background: #fed7d7;
+            border: 1px solid #fc8181;
+            color: #c53030;
+        }
+        
+        .api-key {
+            background: #edf2f7;
+            border: 1px solid #cbd5e0;
+            color: #2d3748;
+            font-size: 14px;
+        }
+        
+        .copy-btn {
+            background: #48bb78;
+            padding: 5px 10px;
+            font-size: 12px;
+            margin-left: 10px;
+            width: auto;
+            display: inline-block;
+        }
+        
+        .endpoint-info {
+            background: #f7fafc;
+            border-left: 4px solid #5a67d8;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .endpoint-info h3 {
+            color: #5a67d8;
+            margin-bottom: 10px;
+        }
+        
+        .code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎵 Radha API</h1>
+            <p>YouTube Audio API for Music Bots</p>
+            <div style="margin-top: 10px;">
+                <span id="statusIndicator" class="status-indicator"></span>
+                <span id="statusText">Checking API status...</span>
+            </div>
+        </header>
+        
+        <div class="dashboard">
+            <!-- API Key Generator -->
+            <div class="card">
+                <h2>🔐 API Key Generator</h2>
+                <p style="margin-bottom: 20px;">Generate a new API key to access the audio endpoints.</p>
+                <button class="btn" onclick="generateApiKey()">Generate New API Key</button>
+                <div id="apiKeyResult"></div>
+            </div>
+            
+            <!-- Audio API Tester -->
+            <div class="card">
+                <h2>🎵 Test Audio API</h2>
+                <div class="input-group">
+                    <label for="apiKey">API Key:</label>
+                    <input type="text" id="apiKey" placeholder="Enter your API key">
+                </div>
+                <div class="input-group">
+                    <label for="query">Search Query:</label>
+                    <input type="text" id="query" placeholder="e.g., Imagine Dragons Believer">
+                </div>
+                <button class="btn" onclick="testAudioApi()">Get Audio URL</button>
+                <div id="audioResult"></div>
+            </div>
+        </div>
+        
+        <!-- API Documentation -->
+        <div class="card">
+            <h2>📚 API Documentation</h2>
+            
+            <div class="endpoint-info">
+                <h3>GET /get-audio</h3>
+                <p><strong>Description:</strong> Get YouTube audio URL for a search query</p>
+                <p><strong>Authentication:</strong> Required (Bearer token in Authorization header)</p>
+                <p><strong>Parameters:</strong></p>
+                <ul style="margin-left: 20px;">
+                    <li><code>query</code> (required): YouTube search query</li>
+                </ul>
+            </div>
+            
+            <div class="code">
+curl -X GET "https://www.radhaapi.me/get-audio?query=your+search+query" \
+     -H "Authorization: Bearer YOUR_API_KEY"</div>
+            
+            <p><strong>Response:</strong></p>
+            <div class="code">{
+  "title": "Song title",
+  "duration": 230,
+  "audio_url": "https://...",
+  "thumbnail": "https://..."
+}</div>
+            
+            <div class="endpoint-info">
+                <h3>POST /generate-api-key</h3>
+                <p><strong>Description:</strong> Generate a new API key</p>
+                <p><strong>Authentication:</strong> Not required</p>
+            </div>
+            
+            <div class="code">curl -X POST "https://www.radhaapi.me/generate-api-key"</div>
+        </div>
+    </div>
+    
+    <script>
+        // Use Render deployment URL (dynamically detect if running locally or on Render)
+        const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+            ? 'http://localhost:8003'  // Local development
+            : 'https://www.radhaapi.me';  // Production URL with your custom domain
+        
+        async function generateApiKey() {
+            const resultDiv = document.getElementById('apiKeyResult');
+            resultDiv.innerHTML = '<div>Generating API key...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/generate-api-key`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                resultDiv.innerHTML = `
+                    <div class="result success">
+                        API Key Generated Successfully!
+                        <button class="copy-btn" onclick="copyToClipboard('${data.api_key}')">Copy</button>
+                    </div>
+                    <div class="result api-key">${data.api_key}</div>
+                `;
+                
+                // Auto-fill the API key in the tester
+                document.getElementById('apiKey').value = data.api_key;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">Error: ${error.message}</div>
+                `;
+            }
+        }
+        
+        async function testAudioApi() {
+            const apiKey = document.getElementById('apiKey').value;
+            const query = document.getElementById('query').value;
+            const resultDiv = document.getElementById('audioResult');
+            
+            if (!apiKey || !query) {
+                resultDiv.innerHTML = '<div class="result error">Please provide both API key and search query</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div>Searching for audio...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/get-audio?query=${encodeURIComponent(query)}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                resultDiv.innerHTML = `
+                    <div class="result success">Audio found successfully!</div>
+                    <div class="result api-key">
+Title: ${data.title}
+Duration: ${data.duration} seconds
+Audio URL: ${data.audio_url}
+Thumbnail: ${data.thumbnail}
+                    </div>
+                    <div class="audio-preview">
+                        <img src="${data.thumbnail}" alt="${data.title}" style="max-width: 100%; border-radius: 8px;">
+                        <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
+                            <a href="${data.audio_url}" target="_blank" class="btn">Listen on YouTube Music</a>
+                            ${data.video_id ? 
+                                `<a href="https://www.youtube.com/watch?v=${data.video_id}" target="_blank" class="btn" style="background: linear-gradient(135deg, #ff0000, #ff5722);">Watch on YouTube</a>` 
+                                : ''}
+                        </div>
+                        <div style="margin-top: 15px; background: #f8f9fa; padding: 10px; border-radius: 8px; font-size: 13px;">
+                            <p><strong>How to use:</strong> Copy the audio_url to your application. This URL can be played by most media players that support YouTube streams.</p>
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">Error: ${error.message}</div>
+                `;
+            }
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('API key copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+            });
+        }
+        
+        // Check if API is online on page load and get default API key
+        window.onload = async function() {
+            try {
+                // Check health
+                const healthResponse = await fetch(`${API_BASE_URL}/health`);
+                if (healthResponse.ok) {
+                    console.log('API is online');
+                    // Show success message
+                    const statusIndicator = document.getElementById('statusIndicator');
+                    const statusText = document.getElementById('statusText');
+                    statusIndicator.className = 'status-indicator status-online';
+                    statusText.textContent = 'API is online (localhost:8003)';
+                    
+                    // Get default API key
+                    const apiResponse = await fetch(`${API_BASE_URL}/api`);
+                    if (apiResponse.ok) {
+                        const apiData = await apiResponse.json();
+                        if (apiData.key) {
+                            // Display the default API key
+                            document.getElementById('apiKeyResult').innerHTML = `
+                                <div class="result success">
+                                    Default API Key Available!
+                                    <button class="copy-btn" onclick="copyToClipboard('${apiData.key}')">Copy</button>
+                                </div>
+                                <div class="result api-key">${apiData.key}</div>
+                            `;
+                            // Auto-fill the API key in the tester
+                            document.getElementById('apiKey').value = apiData.key;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.log('API is offline');
+                // Show offline warning
+                const statusIndicator = document.getElementById('statusIndicator');
+                const statusText = document.getElementById('statusText');
+                statusIndicator.className = 'status-indicator status-offline';
+                statusText.textContent = 'API is offline - Check the server';
+            }
+        };
+    </script>
+</body>
+</html>
