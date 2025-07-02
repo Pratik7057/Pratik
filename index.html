@@ -265,44 +265,140 @@ curl -X GET "https://www.radhaapi.me/get-audio?query=your+search+query" \
     </div>
     
     <script>
-        // Use Render deployment URL (dynamically detect if running locally or on Render)
-        const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-            ? 'http://localhost:8003'  // Local development
-            : 'https://www.radhaapi.me';  // Production URL with your custom domain
+        // Use your domain directly
+        const API_BASE_URL = 'https://www.radhaapi.me';
         
         async function generateApiKey() {
             const resultDiv = document.getElementById('apiKeyResult');
             resultDiv.innerHTML = '<div>Generating API key...</div>';
+            console.log("Attempting to generate API key...");
             
             try {
-                const response = await fetch(`${API_BASE_URL}/generate-api-key`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
+                // Try GET method first - more reliable with CORS
+                try {
+                    console.log("Trying GET method first for API key generation...");
+                    const getResponse = await fetch(`${API_BASE_URL}/generate-api-key-temp`, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Cache-Control': 'no-cache'
+                        },
+                        mode: 'cors',
+                        credentials: 'omit',
+                        cache: 'no-store'
+                    });
+                    
+                    console.log("GET response status:", getResponse.status);
+                    if (getResponse.headers) {
+                        console.log("GET response headers:", Object.fromEntries([...getResponse.headers.entries()]));
                     }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    
+                    if (getResponse.ok) {
+                        const data = await getResponse.json();
+                        console.log("API key generated successfully with GET:", data);
+                        displayApiKey(data, resultDiv);
+                        return;
+                    } else {
+                        console.error("GET failed with status:", getResponse.status);
+                    }
+                } catch (getError) {
+                    console.error("GET method failed:", getError);
                 }
                 
-                const data = await response.json();
-                resultDiv.innerHTML = `
-                    <div class="result success">
-                        API Key Generated Successfully!
-                        <button class="copy-btn" onclick="copyToClipboard('${data.api_key}')">Copy</button>
-                    </div>
-                    <div class="result api-key">${data.api_key}</div>
-                `;
+                // If GET fails, try with POST method
+                console.log("Falling back to POST method...");
                 
-                // Auto-fill the API key in the tester
-                document.getElementById('apiKey').value = data.api_key;
+                // First, make an OPTIONS request to ensure CORS is properly configured
+                try {
+                    console.log("Sending OPTIONS preflight for POST...");
+                    const optionsResponse = await fetch(`${API_BASE_URL}/generate-api-key`, {
+                        method: 'OPTIONS',
+                        headers: {
+                            'Access-Control-Request-Method': 'POST',
+                            'Access-Control-Request-Headers': 'Content-Type, Accept',
+                            'Origin': window.location.origin
+                        },
+                        mode: 'cors'
+                    });
+                    console.log("OPTIONS response status:", optionsResponse.status);
+                } catch (optionsError) {
+                    console.warn("OPTIONS request failed (this may be normal):", optionsError);
+                    // Continue anyway as some browsers handle OPTIONS internally
+                }
                 
+                // Now make the actual POST request
+                try {
+                    const response = await fetch(`${API_BASE_URL}/generate-api-key`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({}),  // Empty body as JSON
+                        mode: 'cors',
+                        credentials: 'omit'
+                    });
+                    
+                    console.log("POST response status:", response.status);
+                    if (response.headers) {
+                        console.log("POST response headers:", Object.fromEntries([...response.headers.entries()]));
+                    }
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log("API key generated successfully with POST:", data);
+                        displayApiKey(data, resultDiv);
+                        return;
+                    } else {
+                        console.error("POST failed with status:", response.status);
+                        // Try to get error message
+                        try {
+                            const errorText = await response.text();
+                            console.error("Error response text:", errorText);
+                            try {
+                                const errorData = JSON.parse(errorText);
+                                console.error("Parsed error data:", errorData);
+                            } catch (e) {
+                                console.error("Could not parse error as JSON");
+                            }
+                        } catch (e) {
+                            console.error("Could not read error response");
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                } catch (postError) {
+                    console.error("POST method failed:", postError);
+                    throw postError; // Re-throw to trigger the catch block below
+                }
             } catch (error) {
+                console.error("All API key generation methods failed:", error);
                 resultDiv.innerHTML = `
                     <div class="result error">Error: ${error.message}</div>
+                    <div class="result error">
+                        <p>Troubleshooting:</p>
+                        <ul style="margin-left: 20px; margin-top: 10px;">
+                            <li>The server might be experiencing issues - please try again later</li>
+                            <li>Check your network connection</li>
+                            <li>Try disabling any browser extensions that might block requests</li>
+                            <li>Check the browser console (F12) for detailed error information</li>
+                            <li>Try using the default API key shown above</li>
+                        </ul>
+                    </div>
                 `;
             }
+        }
+        
+        function displayApiKey(data, resultDiv) {
+            resultDiv.innerHTML = `
+                <div class="result success">
+                    API Key Generated Successfully!
+                    <button class="copy-btn" onclick="copyToClipboard('${data.api_key}')">Copy</button>
+                </div>
+                <div class="result api-key">${data.api_key}</div>
+            `;
+            
+            // Auto-fill the API key in the tester
+            document.getElementById('apiKey').value = data.api_key;
         }
         
         async function testAudioApi() {
@@ -380,7 +476,7 @@ Thumbnail: ${data.thumbnail}
                     const statusIndicator = document.getElementById('statusIndicator');
                     const statusText = document.getElementById('statusText');
                     statusIndicator.className = 'status-indicator status-online';
-                    statusText.textContent = 'API is online (localhost:8003)';
+                    statusText.textContent = 'API is online (www.radhaapi.me)';
                     
                     // Get default API key
                     const apiResponse = await fetch(`${API_BASE_URL}/api`);
@@ -410,5 +506,14 @@ Thumbnail: ${data.thumbnail}
             }
         };
     </script>
+
+    <!-- Footer with debug link -->
+    <footer style="text-align: center; padding: 20px; margin-top: 20px; font-size: 0.8rem; color: white;">
+        <p>Radha API © 2023</p>
+        <p style="margin-top: 5px;">
+            <a href="/debug-info" target="_blank" style="color: white; text-decoration: underline;">Debug Info</a> | 
+            <a href="/status" target="_blank" style="color: white; text-decoration: underline;">Status Page</a>
+        </p>
+    </footer>
 </body>
 </html>
