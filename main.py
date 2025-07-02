@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import yt_dlp
 import os
@@ -14,13 +14,15 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Radha API", version="1.0")
 
-# Allow all frontend access (for now)
+# Enhanced CORS configuration for production compatibility
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins temporarily to troubleshoot
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH"],  # Allow all common methods
+    allow_headers=["*"],  # Allow all headers to simplify configuration
+    expose_headers=["*"],  # Expose all headers
+    max_age=3600  # Longer cache for preflight requests (1 hour)
 )
 
 # Mount static files directory
@@ -63,11 +65,99 @@ async def status_page():
 async def api_root():
     return {"message": "Radha API running", "key": DEFAULT_API_KEY}
 
+# Enhanced OPTIONS handler with better compatibility
+@app.options("/{full_path:path}")
+async def options_handler(request: Request, full_path: str):
+    # Log the OPTIONS request for debugging
+    client_host = request.client.host if request.client else "unknown"
+    logger.info(f"OPTIONS request for /{full_path} from {client_host}")
+    logger.info(f"OPTIONS headers: {dict(request.headers)}")
+    
+    # Return with comprehensive CORS headers
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+            "Access-Control-Allow-Headers": "*",  # Allow all headers for maximum compatibility
+            "Access-Control-Max-Age": "3600",     # 1 hour cache for preflight
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",                     # Important for caching with different origins
+            "Content-Length": "0"                 # Explicitly set content length for OPTIONS
+        }
+    )
+
 @app.post("/generate-api-key")
-async def generate_api():
-    new_key = secrets.token_urlsafe(32)
-    VALID_API_KEYS.add(new_key)
-    return {"api_key": new_key, "message": "API key generated"}
+async def generate_api(request: Request):
+    try:
+        # Log request details for debugging
+        client_host = request.client.host if request.client else "unknown"
+        logger.info(f"Generate API key requested from: {client_host}")
+        logger.info(f"Headers: {dict(request.headers)}")
+        
+        # Generate new API key
+        new_key = secrets.token_urlsafe(32)
+        VALID_API_KEYS.add(new_key)
+        logger.info(f"New API key generated: {new_key[:5]}...")
+        
+        # Return with explicit CORS headers to ensure browser compatibility
+        return JSONResponse(
+            status_code=200,
+            content={"api_key": new_key, "message": "API key generated"},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Max-Age": "3600",
+                "Content-Type": "application/json"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error in generate_api: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to generate API key: {str(e)}"},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*"
+            }
+        )
+
+# GET method as a fallback for API key generation (useful when POST has CORS issues)
+@app.get("/generate-api-key-temp")
+async def generate_api_temp(request: Request):
+    try:
+        # Log request details for debugging
+        client_host = request.client.host if request.client else "unknown"
+        logger.info(f"GET API key generation requested from: {client_host}")
+        
+        new_key = secrets.token_urlsafe(32)
+        VALID_API_KEYS.add(new_key)
+        logger.info(f"New API key generated via GET: {new_key[:5]}...")
+        
+        # Return with enhanced CORS headers
+        return JSONResponse(
+            status_code=200,
+            content={"api_key": new_key, "message": "API key generated via GET fallback"},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Content-Type": "application/json",
+                "Cache-Control": "no-cache, no-store, must-revalidate" # Prevent caching
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error in generate_api_temp: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to generate API key: {str(e)}"},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json"
+            }
+        )
 
 @app.get("/list-api-keys")
 async def list_keys(_: str = Depends(verify_api_key)):
@@ -134,6 +224,50 @@ async def get_audio(query: str, _: str = Depends(verify_api_key)):
     except Exception as e:
         logger.error(f"Error fetching song: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch song: {str(e)}")
+
+# Add a diagnostic endpoint to help troubleshoot API issues
+@app.get("/debug-info")
+async def debug_info(request: Request):
+    try:
+        # Collect information about the environment
+        import sys
+        import platform
+        
+        client_host = request.client.host if request.client else "unknown"
+        
+        debug_data = {
+            "server_info": {
+                "python_version": sys.version,
+                "platform": platform.platform(),
+                "environment": {k: v for k, v in os.environ.items() if k.lower() in 
+                              ['port', 'host', 'railway_static_url', 'railway_environment', 
+                               'python_env', 'path', 'server_software']},
+            },
+            "request_info": {
+                "client_ip": client_host,
+                "headers": dict(request.headers),
+                "method": request.method,
+                "url": str(request.url),
+            },
+            "cors_config": {
+                "allow_origins": "*",
+                "allow_methods": ["GET", "POST", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
+            },
+            "api_keys": {
+                "total_keys": len(VALID_API_KEYS),
+                "default_key_length": len(DEFAULT_API_KEY) if DEFAULT_API_KEY else 0,
+            }
+        }
+        
+        logger.info(f"Debug info accessed by {client_host}")
+        return JSONResponse(content=debug_data)
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {str(e)}")
+        return JSONResponse(
+            status_code=500, 
+            content={"error": f"Error generating debug info: {str(e)}"}
+        )
 
 if __name__ == "__main__":
     import uvicorn
